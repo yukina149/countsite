@@ -24,6 +24,8 @@ type InstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+const BASE_PATH = import.meta.env.BASE_URL;
+
 const SEED_PRODUCTS: Product[] = [
   { id: "sample-1", name: "手作檸檬塔", price: 85, accent: "#F7D8A8" },
   { id: "sample-2", name: "冷泡烏龍茶", price: 60, accent: "#CFE8DB" },
@@ -153,10 +155,10 @@ export default function Home() {
     window.addEventListener("offline", updateConnection);
     window.addEventListener("beforeinstallprompt", captureInstall);
 
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-      navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready).then(() => {
+    if ("serviceWorker" in navigator && import.meta.env.PROD) {
+      navigator.serviceWorker.register(`${BASE_PATH}sw.js`, { scope: BASE_PATH }).then(() => navigator.serviceWorker.ready).then(() => {
         const warmOfflineCache = () => {
-          const urls = new Set<string>([window.location.pathname, "/manifest.webmanifest"]);
+          const urls = new Set<string>([window.location.pathname, `${BASE_PATH}manifest.webmanifest`]);
           document.querySelectorAll<HTMLLinkElement | HTMLScriptElement>("link[href], script[src]").forEach((node) => {
             const value = "href" in node ? node.href : node.src;
             if (value && value.startsWith(window.location.origin)) urls.add(value);

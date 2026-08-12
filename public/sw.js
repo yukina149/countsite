@@ -1,5 +1,7 @@
-const CACHE_NAME = "market-mate-v1";
-const CORE_ASSETS = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const CACHE_NAME = "market-mate-pages-v1";
+const BASE_PATH = new URL(self.registration.scope).pathname;
+const asset = (name = "") => `${BASE_PATH}${name}`;
+const CORE_ASSETS = [asset(), asset("manifest.webmanifest"), asset("icon-192.png"), asset("icon-512.png")];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
@@ -22,10 +24,10 @@ self.addEventListener("fetch", (event) => {
       fetch(event.request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
+          caches.open(CACHE_NAME).then((cache) => cache.put(asset(), copy));
           return response;
         })
-        .catch(() => caches.match("/")),
+        .catch(() => caches.match(asset())),
     );
     return;
   }
