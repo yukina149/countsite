@@ -37,6 +37,7 @@ button { color: inherit; }
 .eyebrow, .section-kicker { margin: 0; color: var(--mint-500); font-size: 10px; font-weight: 800; letter-spacing: .18em; }
 .top-actions { display: flex; align-items: center; gap: 10px; }
 .connection-pill { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; background: rgba(255,255,255,.68); border: 1px solid rgba(216,230,224,.8); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.top-actions .connection-pill, .top-actions .button { width: 112px; min-height: 43px; padding: 0 10px; justify-content: center; border-radius: 13px; font-size: 12px; }
 .connection-pill i { width: 7px; height: 7px; border-radius: 50%; background: #6fae86; box-shadow: 0 0 0 4px rgba(111,174,134,.12); }
 .connection-pill.offline i { background: #d7a45d; box-shadow: 0 0 0 4px rgba(215,164,93,.14); }
 .button { border: 0; border-radius: 13px; min-height: 43px; padding: 0 17px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 800; cursor: pointer; transition: transform .18s ease, background .18s ease, box-shadow .18s ease; }
@@ -61,7 +62,7 @@ button { color: inherit; }
 .section-heading > div { display: flex; align-items: baseline; gap: 10px; }
 .section-heading h3, .order-head h3 { margin: 0; font-size: 18px; }
 .section-heading span { color: var(--muted); font-size: 12px; }
-.section-heading > .product-data-actions { align-items: center; gap: 7px; }
+.catalog-add-button { min-height: 35px; padding: 0 12px; border-radius: 10px; font-size: 11px; }
 .data-button { min-height: 35px; padding: 0 11px; border-radius: 10px; font-size: 11px; }
 .backup-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
@@ -158,19 +159,19 @@ button { color: inherit; }
 @media (max-width: 780px) {
   body { background: #f5f9f7; }
   .app-shell { padding: 16px 15px 105px; }
-  .topbar { align-items: flex-start; padding-bottom: 28px; }
+  .topbar { align-items: flex-start; flex-wrap: wrap; padding-bottom: 28px; }
   .brand-mark { width: 41px; height: 41px; border-radius: 13px; }
   .brand-lockup h1 { font-size: 19px; }
-  .connection-pill, .install-button { display: none; }
   .button.primary { min-height: 41px; padding: 0 13px; font-size: 13px; }
   .intro-row { display: block; margin-bottom: 18px; }
   .intro-row h2 { font-size: 25px; line-height: 1.3; }
   .saved-note { margin-top: 10px; }
   .workspace { display: block; }
   .catalog { padding: 16px; border-radius: 21px; min-height: 0; }
-  .section-heading { align-items: stretch; flex-direction: column; gap: 12px; }
-  .section-heading > .product-data-actions { display: grid; grid-template-columns: 1fr 1fr; }
-  .data-button { width: 100%; }
+  .section-heading { align-items: center; flex-direction: row; gap: 10px; }
+  .section-heading .catalog-add-button { width: auto; min-height: 34px; padding: 0 10px; font-size: 11px; }
+  .top-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; }
+  .top-actions .connection-pill, .top-actions .button { width: 100%; min-height: 36px; padding: 0 4px; border-radius: 10px; font-size: 10px; }
   .product-grid { gap: 11px; }
   .product-card { border-radius: 16px; }
   .product-info { padding: 11px 11px 5px; }
@@ -199,7 +200,6 @@ button { color: inherit; }
   .app-shell { padding-left: 10px; padding-right: 10px; }
   .topbar { gap: 10px; }
   .brand-lockup { gap: 9px; }
-  .top-actions .button.primary { padding: 0 10px; }
   .product-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .catalog { padding: 12px; }
 }

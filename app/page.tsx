@@ -646,9 +646,20 @@ export default function Home() {
               安裝到裝置
             </button>
           )}
-          <button className="button primary" type="button" onClick={openCreate}>
-            <span aria-hidden="true">＋</span> 新增商品
+          <button className="button ghost data-button" type="button" onClick={exportProductBackup} disabled={products.length === 0}>
+            匯出備份
           </button>
+          <button className="button ghost data-button" type="button" onClick={() => backupFileInput.current?.click()}>
+            還原商品
+          </button>
+          <input
+            ref={backupFileInput}
+            className="backup-file-input"
+            type="file"
+            accept=".json,application/json"
+            onChange={restoreProductBackup}
+            aria-label="選擇商品 JSON 備份檔"
+          />
         </div>
       </header>
 
@@ -667,22 +678,9 @@ export default function Home() {
               <h3 id="catalog-title">商品</h3>
               <span>{products.length} 項商品</span>
             </div>
-            <div className="product-data-actions">
-              <button className="button ghost data-button" type="button" onClick={exportProductBackup} disabled={products.length === 0}>
-                匯出備份
-              </button>
-              <button className="button ghost data-button" type="button" onClick={() => backupFileInput.current?.click()}>
-                還原商品
-              </button>
-              <input
-                ref={backupFileInput}
-                className="backup-file-input"
-                type="file"
-                accept=".json,application/json"
-                onChange={restoreProductBackup}
-                aria-label="選擇商品 JSON 備份檔"
-              />
-            </div>
+            <button className="button primary catalog-add-button" type="button" onClick={openCreate}>
+              <span aria-hidden="true">＋</span> 新增商品
+            </button>
           </div>
 
           {products.length === 0 ? (
