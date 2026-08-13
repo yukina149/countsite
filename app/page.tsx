@@ -6,6 +6,7 @@ import {
   MouseEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -40,6 +41,13 @@ type Order = {
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+type ProductBackup = {
+  format: "market-mate-product-backup";
+  version: 1;
+  exportedAt: string;
+  products: Product[];
 };
 
 const BASE_PATH = import.meta.env.BASE_URL;
@@ -78,6 +86,45 @@ function csvCell(value: string | number) {
   let text = String(value);
   if (/^[=+\-@]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
+}
+
+function readProductsFromBackup(value: unknown): Product[] | null {
+  if (!value || typeof value !== "object") return null;
+  const backup = value as Record<string, unknown>;
+  if (backup.format !== "market-mate-product-backup" || backup.version !== 1 || !Array.isArray(backup.products)) {
+    return null;
+  }
+
+  const ids = new Set<string>();
+  const restoredProducts: Product[] = [];
+  for (const item of backup.products) {
+    if (!item || typeof item !== "object") return null;
+    const product = item as Record<string, unknown>;
+    const id = typeof product.id === "string" ? product.id.trim() : "";
+    const name = typeof product.name === "string" ? product.name.trim() : "";
+    const price = product.price;
+    const accent = product.accent;
+    const image = product.image;
+    const imageIsValid = image === undefined || (
+      typeof image === "string"
+      && (/^data:image\/(?:png|jpeg|webp);base64,/i.test(image) || /^(?:\.?\/|https?:\/\/)/i.test(image))
+    );
+
+    if (
+      !id || id.length > 200 || ids.has(id)
+      || !name || name.length > 40
+      || typeof price !== "number" || !Number.isFinite(price) || price < 0 || !Number.isInteger(price)
+      || typeof accent !== "string" || !/^#[0-9a-f]{6}$/i.test(accent)
+      || !imageIsValid
+    ) {
+      return null;
+    }
+
+    ids.add(id);
+    restoredProducts.push({ id, name, price, accent, ...(typeof image === "string" ? { image } : {}) });
+  }
+
+  return restoredProducts;
 }
 
 
@@ -163,6 +210,8 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [printReportOpen, setPrintReportOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [cashReceived, setCashReceived] = useState("");
+  const backupFileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -173,7 +222,7 @@ export default function Home() {
     ])
       .then(([savedProducts, savedCart, savedOrders]) => {
         if (!active) return;
-        if (savedProducts?.length) setProducts(savedProducts);
+        if (savedProducts !== undefined) setProducts(savedProducts);
         if (savedCart) setCart(savedCart);
         if (savedOrders) setOrders(savedOrders);
       })
@@ -256,6 +305,19 @@ export default function Home() {
     () => products.reduce((sum, product) => sum + product.price * (cart[product.id] ?? 0), 0),
     [cart, products],
   );
+  const hasCashReceived = cashReceived.trim() !== "";
+  const cashReceivedAmount = useMemo(() => {
+    if (!hasCashReceived) return null;
+    const amount = Number(cashReceived);
+    return Number.isFinite(amount) && amount >= 0 ? Math.round(amount) : null;
+  }, [cashReceived, hasCashReceived]);
+  const changeAmount = cashReceivedAmount === null ? null : cashReceivedAmount - total;
+  const paymentInvalid = hasCashReceived && cashReceivedAmount === null;
+  const paymentInsufficient = changeAmount !== null && changeAmount < 0;
+
+  useEffect(() => {
+    if (totalItems === 0 && cashReceived !== "") setCashReceived("");
+  }, [cashReceived, totalItems]);
 
   const filteredOrders = useMemo(() => {
     if (historyFilter === "all") return orders;
@@ -400,12 +462,21 @@ export default function Home() {
   function cancelOrder() {
     if (totalItems > 0 && window.confirm("要清空目前這筆訂單嗎？")) {
       setCart({});
+      setCashReceived("");
       setNotice("已取消本筆訂單");
     }
   }
 
   function submitOrder() {
     if (totalItems === 0) return;
+    if (paymentInvalid) {
+      setNotice("請輸入有效的付款金額");
+      return;
+    }
+    if (paymentInsufficient) {
+      setNotice(`付款尚差 ${money.format(Math.abs(changeAmount ?? 0))}`);
+      return;
+    }
     const createdAt = new Date();
     const id = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(createdAt.getTime());
     const items = cartProducts.map((product) => {
@@ -429,6 +500,7 @@ export default function Home() {
       total,
     }, ...current]);
     setCart({});
+    setCashReceived("");
     setNotice(`訂單 ${orderNumber} 已送出`);
   }
 
@@ -475,6 +547,52 @@ export default function Home() {
     link.remove();
     URL.revokeObjectURL(url);
     setNotice(`已匯出 ${filteredOrders.length} 筆訂單 CSV`);
+  }
+
+  function exportProductBackup() {
+    const backup: ProductBackup = {
+      format: "market-mate-product-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      products,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `market-mate-products-${formatFileDate()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice(`已備份 ${products.length} 項商品`);
+  }
+
+  async function restoreProductBackup(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) {
+      setNotice("備份檔案過大，請確認檔案是否正確");
+      return;
+    }
+
+    try {
+      const restoredProducts = readProductsFromBackup(JSON.parse(await file.text()));
+      if (!restoredProducts) {
+        setNotice("無法還原：不是有效的商品備份檔");
+        return;
+      }
+      if (!window.confirm(`將以備份中的 ${restoredProducts.length} 項商品覆蓋目前商品，並清空目前訂單。歷史訂單不受影響。確定繼續嗎？`)) {
+        return;
+      }
+      setProducts(restoredProducts);
+      setCart({});
+      setCashReceived("");
+      setNotice(`已還原 ${restoredProducts.length} 項商品`);
+    } catch {
+      setNotice("無法還原：JSON 檔案格式錯誤");
+    }
   }
 
   function exportPdf() {
@@ -528,9 +646,20 @@ export default function Home() {
               安裝到裝置
             </button>
           )}
-          <button className="button primary" type="button" onClick={openCreate}>
-            <span aria-hidden="true">＋</span> 新增商品
+          <button className="button ghost data-button" type="button" onClick={exportProductBackup} disabled={products.length === 0}>
+            匯出備份
           </button>
+          <button className="button ghost data-button" type="button" onClick={() => backupFileInput.current?.click()}>
+            還原商品
+          </button>
+          <input
+            ref={backupFileInput}
+            className="backup-file-input"
+            type="file"
+            accept=".json,application/json"
+            onChange={restoreProductBackup}
+            aria-label="選擇商品 JSON 備份檔"
+          />
         </div>
       </header>
 
@@ -549,6 +678,9 @@ export default function Home() {
               <h3 id="catalog-title">商品</h3>
               <span>{products.length} 項商品</span>
             </div>
+            <button className="button primary catalog-add-button" type="button" onClick={openCreate}>
+              <span aria-hidden="true">＋</span> 新增商品
+            </button>
           </div>
 
           {products.length === 0 ? (
@@ -644,11 +776,49 @@ export default function Home() {
               <span>總計</span>
               <strong>{money.format(total)}</strong>
             </div>
+            <div className="cash-payment">
+              <div className="cash-entry">
+                <label htmlFor="cash-received">顧客付款</label>
+                <div className="cash-input">
+                  <span>NT$</span>
+                  <input
+                    id="cash-received"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={cashReceived}
+                    onChange={(event) => setCashReceived(event.target.value)}
+                    disabled={totalItems === 0}
+                    aria-describedby="change-result"
+                  />
+                </div>
+                <button
+                  className="exact-payment"
+                  type="button"
+                  onClick={() => setCashReceived(String(total))}
+                  disabled={totalItems === 0}
+                >
+                  剛好付清
+                </button>
+              </div>
+              <div
+                id="change-result"
+                className={`change-result ${paymentInvalid || paymentInsufficient ? "insufficient" : changeAmount !== null ? "ready" : ""}`}
+                aria-live="polite"
+              >
+                <span>{paymentInvalid ? "付款金額無效" : paymentInsufficient ? "尚差" : "找零"}</span>
+                <strong>
+                  {paymentInvalid || changeAmount === null ? "—" : money.format(Math.abs(changeAmount))}
+                </strong>
+              </div>
+            </div>
             <div className="order-actions">
               <button className="button cancel-order" type="button" onClick={cancelOrder} disabled={totalItems === 0}>
                 取消本筆
               </button>
-              <button className="button submit-order" type="button" onClick={submitOrder} disabled={totalItems === 0}>
+              <button className="button submit-order" type="button" onClick={submitOrder} disabled={totalItems === 0 || paymentInvalid || paymentInsufficient}>
                 送出訂單
               </button>
             </div>
