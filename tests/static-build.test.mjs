@@ -35,6 +35,11 @@ test("ships installable, offline, device-local assets", async () => {
   assert.match(page, /import\.meta\.env\.BASE_URL/);
   assert.match(page, /writeLocal\("orders", orders\)/);
   assert.match(page, /function submitOrder\(\)/);
+  assert.match(page, /cashReceivedAmount - total/);
+  assert.match(page, /顧客付款/);
+  assert.match(page, /剛好付清/);
+  assert.match(page, /paymentInsufficient/);
+  assert.match(styles, /\.change-result\.insufficient/);
   assert.match(page, /訂單管理/);
   assert.match(page, /作廢訂單/);
   assert.match(page, /永久刪除/);

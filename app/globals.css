@@ -101,6 +101,21 @@ button { color: inherit; }
 .total-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
 .total-row span { color: var(--muted); font-size: 13px; font-weight: 700; }
 .total-row strong { font-size: 28px; letter-spacing: -.04em; }
+.cash-payment { display: grid; gap: 11px; margin-bottom: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.72); }
+.cash-entry { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px; }
+.cash-entry label { grid-column: 1 / -1; color: var(--muted); font-size: 12px; font-weight: 750; }
+.cash-input { position: relative; }
+.cash-input span { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 11px; font-weight: 800; pointer-events: none; }
+.cash-input input { width: 100%; height: 43px; padding: 0 11px 0 43px; border: 1px solid var(--line); border-radius: 11px; background: #fff; color: var(--ink); font-size: 18px; font-weight: 850; }
+.cash-input input:focus { outline: 3px solid rgba(79,140,121,.18); border-color: #92b8a9; }
+.cash-input input:disabled { opacity: .55; background: #f4f7f5; }
+.exact-payment { min-height: 43px; padding: 0 11px; border: 1px solid var(--line); border-radius: 11px; background: var(--mint-50); color: var(--mint-700); font-size: 11px; font-weight: 800; cursor: pointer; }
+.exact-payment:disabled { opacity: .45; cursor: default; }
+.change-result { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 42px; padding: 10px 12px; border-radius: 11px; background: #f2f5f3; color: var(--muted); }
+.change-result span { font-size: 12px; font-weight: 800; }
+.change-result strong { font-size: 21px; letter-spacing: -.025em; }
+.change-result.ready { background: var(--mint-100); color: var(--mint-700); }
+.change-result.insufficient { background: #fbefef; color: var(--danger); }
 .new-order { width: 100%; background: var(--mint-100); color: var(--mint-700); }
 .new-order:not(:disabled):hover { background: #d8ebe2; }
 

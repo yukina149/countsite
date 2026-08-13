@@ -163,6 +163,7 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [printReportOpen, setPrintReportOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [cashReceived, setCashReceived] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -256,6 +257,19 @@ export default function Home() {
     () => products.reduce((sum, product) => sum + product.price * (cart[product.id] ?? 0), 0),
     [cart, products],
   );
+  const hasCashReceived = cashReceived.trim() !== "";
+  const cashReceivedAmount = useMemo(() => {
+    if (!hasCashReceived) return null;
+    const amount = Number(cashReceived);
+    return Number.isFinite(amount) && amount >= 0 ? Math.round(amount) : null;
+  }, [cashReceived, hasCashReceived]);
+  const changeAmount = cashReceivedAmount === null ? null : cashReceivedAmount - total;
+  const paymentInvalid = hasCashReceived && cashReceivedAmount === null;
+  const paymentInsufficient = changeAmount !== null && changeAmount < 0;
+
+  useEffect(() => {
+    if (totalItems === 0 && cashReceived !== "") setCashReceived("");
+  }, [cashReceived, totalItems]);
 
   const filteredOrders = useMemo(() => {
     if (historyFilter === "all") return orders;
@@ -400,12 +414,21 @@ export default function Home() {
   function cancelOrder() {
     if (totalItems > 0 && window.confirm("要清空目前這筆訂單嗎？")) {
       setCart({});
+      setCashReceived("");
       setNotice("已取消本筆訂單");
     }
   }
 
   function submitOrder() {
     if (totalItems === 0) return;
+    if (paymentInvalid) {
+      setNotice("請輸入有效的付款金額");
+      return;
+    }
+    if (paymentInsufficient) {
+      setNotice(`付款尚差 ${money.format(Math.abs(changeAmount ?? 0))}`);
+      return;
+    }
     const createdAt = new Date();
     const id = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(createdAt.getTime());
     const items = cartProducts.map((product) => {
@@ -429,6 +452,7 @@ export default function Home() {
       total,
     }, ...current]);
     setCart({});
+    setCashReceived("");
     setNotice(`訂單 ${orderNumber} 已送出`);
   }
 
@@ -644,11 +668,49 @@ export default function Home() {
               <span>總計</span>
               <strong>{money.format(total)}</strong>
             </div>
+            <div className="cash-payment">
+              <div className="cash-entry">
+                <label htmlFor="cash-received">顧客付款</label>
+                <div className="cash-input">
+                  <span>NT$</span>
+                  <input
+                    id="cash-received"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={cashReceived}
+                    onChange={(event) => setCashReceived(event.target.value)}
+                    disabled={totalItems === 0}
+                    aria-describedby="change-result"
+                  />
+                </div>
+                <button
+                  className="exact-payment"
+                  type="button"
+                  onClick={() => setCashReceived(String(total))}
+                  disabled={totalItems === 0}
+                >
+                  剛好付清
+                </button>
+              </div>
+              <div
+                id="change-result"
+                className={`change-result ${paymentInvalid || paymentInsufficient ? "insufficient" : changeAmount !== null ? "ready" : ""}`}
+                aria-live="polite"
+              >
+                <span>{paymentInvalid ? "付款金額無效" : paymentInsufficient ? "尚差" : "找零"}</span>
+                <strong>
+                  {paymentInvalid || changeAmount === null ? "—" : money.format(Math.abs(changeAmount))}
+                </strong>
+              </div>
+            </div>
             <div className="order-actions">
               <button className="button cancel-order" type="button" onClick={cancelOrder} disabled={totalItems === 0}>
                 取消本筆
               </button>
-              <button className="button submit-order" type="button" onClick={submitOrder} disabled={totalItems === 0}>
+              <button className="button submit-order" type="button" onClick={submitOrder} disabled={totalItems === 0 || paymentInvalid || paymentInsufficient}>
                 送出訂單
               </button>
             </div>
