@@ -62,6 +62,25 @@ const money = new Intl.NumberFormat("zh-TW", {
   maximumFractionDigits: 0,
 });
 
+const orderDateTime = new Intl.DateTimeFormat("zh-TW", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function formatFileDate(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function csvCell(value: string | number) {
+  let text = String(value);
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+
 function openDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
@@ -142,6 +161,7 @@ export default function Home() {
   const [image, setImage] = useState<string | undefined>();
   const [imageBusy, setImageBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [printReportOpen, setPrintReportOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
 
   useEffect(() => {
@@ -429,6 +449,50 @@ export default function Home() {
   }
 
 
+
+  function exportCsv() {
+    if (filteredOrders.length === 0) return;
+    const headers = ["訂單編號", "訂單時間", "狀態", "商品名稱", "單價", "數量", "小計", "訂單商品數", "訂單總額"];
+    const rows = filteredOrders.flatMap((order) => order.items.map((item) => [
+      order.orderNumber,
+      orderDateTime.format(new Date(order.createdAt)),
+      order.status === "completed" ? "有效" : "已作廢",
+      item.name,
+      item.price,
+      item.quantity,
+      item.subtotal,
+      order.totalItems,
+      order.total,
+    ]));
+    const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `stall-orders-${historyFilter}-${formatFileDate()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice(`已匯出 ${filteredOrders.length} 筆訂單 CSV`);
+  }
+
+  function exportPdf() {
+    if (filteredOrders.length === 0) return;
+    const previousTitle = document.title;
+    const reportName = historyFilter === "today" ? "今日訂單" : "全部訂單";
+    const cleanup = () => {
+      document.title = previousTitle;
+      setPrintReportOpen(false);
+    };
+    setPrintReportOpen(true);
+    document.title = `擺攤小工具-${reportName}-${formatFileDate()}`;
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => window.print());
+    });
+  }
+
   async function installApp() {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -601,9 +665,15 @@ export default function Home() {
           <span>共 {filteredOrders.length} 筆紀錄</span>
         </div>
 
-        <div className="history-filters" aria-label="訂單日期篩選">
-          <button type="button" className={historyFilter === "today" ? "active" : ""} onClick={() => changeHistoryFilter("today")}>今天</button>
-          <button type="button" className={historyFilter === "all" ? "active" : ""} onClick={() => changeHistoryFilter("all")}>全部</button>
+        <div className="history-tools">
+          <div className="history-filters" aria-label="訂單日期篩選">
+            <button type="button" className={historyFilter === "today" ? "active" : ""} onClick={() => changeHistoryFilter("today")}>今天</button>
+            <button type="button" className={historyFilter === "all" ? "active" : ""} onClick={() => changeHistoryFilter("all")}>全部</button>
+          </div>
+          <div className="export-actions" aria-label="匯出目前篩選的訂單">
+            <button className="button ghost" type="button" onClick={exportCsv} disabled={filteredOrders.length === 0}>匯出 CSV</button>
+            <button className="button ghost" type="button" onClick={exportPdf} disabled={filteredOrders.length === 0}>匯出 PDF</button>
+          </div>
         </div>
 
         <div className="order-stats" aria-label="目前篩選的有效訂單統計">
@@ -674,6 +744,61 @@ export default function Home() {
         )}
       </section>
 
+
+
+      {printReportOpen && (
+        <section className="print-report" aria-hidden="true">
+          <header className="print-report-head">
+            <div>
+              <p>擺攤小工具</p>
+              <h1>{historyFilter === "today" ? "今日訂單報表" : "全部訂單報表"}</h1>
+            </div>
+            <div className="print-report-meta">
+              <span>範圍：{historyFilter === "today" ? formatFileDate() : "全部紀錄"}</span>
+              <span>產生時間：{orderDateTime.format(new Date())}</span>
+            </div>
+          </header>
+
+          <div className="print-stats">
+            <div><span>有效訂單</span><strong>{orderStats.count} 筆</strong></div>
+            <div><span>售出商品</span><strong>{orderStats.items} 件</strong></div>
+            <div><span>有效訂單總額</span><strong>{money.format(orderStats.total)}</strong></div>
+          </div>
+
+          <div className="print-order-list">
+            {filteredOrders.map((order) => (
+              <article className="print-order" key={`print-${order.id}`}>
+                <header>
+                  <div>
+                    <strong>訂單 #{order.orderNumber}</strong>
+                    <time>{orderDateTime.format(new Date(order.createdAt))}</time>
+                  </div>
+                  <span>{order.status === "completed" ? "有效" : "已作廢"}</span>
+                </header>
+                <table>
+                  <thead>
+                    <tr><th>商品</th><th>單價</th><th>數量</th><th>小計</th></tr>
+                  </thead>
+                  <tbody>
+                    {order.items.map((item) => (
+                      <tr key={`print-${order.id}-${item.productId}`}>
+                        <td>{item.name}</td>
+                        <td>{money.format(item.price)}</td>
+                        <td>{item.quantity}</td>
+                        <td>{money.format(item.subtotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr><td colSpan={2}>{order.totalItems} 件商品</td><td colSpan={2}>訂單總額 {money.format(order.total)}</td></tr>
+                  </tfoot>
+                </table>
+              </article>
+            ))}
+          </div>
+          <p className="print-note">作廢訂單保留於明細中，但不計入有效訂單統計與總額。</p>
+        </section>
+      )}
 
       <a className="mobile-total" href="#order-summary">
         <span><b>{totalItems}</b> 件商品</span>
