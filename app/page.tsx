@@ -54,6 +54,7 @@ const SEED_PRODUCTS: Product[] = [
 const ACCENTS = ["#CFE8DB", "#D9E6F2", "#F7D8A8", "#E7D9EF", "#F1CFC9"];
 const DB_NAME = "market-mate-local";
 const STORE_NAME = "stall-data";
+const ORDERS_PER_PAGE = 20;
 
 const money = new Intl.NumberFormat("zh-TW", {
   style: "currency",
@@ -129,6 +130,9 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
   const [cart, setCart] = useState<Cart>({});
   const [orders, setOrders] = useState<Order[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<"today" | "all">("today");
+  const [visibleOrderCount, setVisibleOrderCount] = useState(ORDERS_PER_PAGE);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(() => new Set());
   const [ready, setReady] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -233,9 +237,23 @@ export default function Home() {
     [cart, products],
   );
 
+  const filteredOrders = useMemo(() => {
+    if (historyFilter === "all") return orders;
+    const today = new Date();
+    return orders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+      return createdAt.getFullYear() === today.getFullYear()
+        && createdAt.getMonth() === today.getMonth()
+        && createdAt.getDate() === today.getDate();
+    });
+  }, [historyFilter, orders]);
+  const visibleOrders = useMemo(
+    () => filteredOrders.slice(0, visibleOrderCount),
+    [filteredOrders, visibleOrderCount],
+  );
   const completedOrders = useMemo(
-    () => orders.filter((order) => order.status === "completed"),
-    [orders],
+    () => filteredOrders.filter((order) => order.status === "completed"),
+    [filteredOrders],
   );
   const orderStats = useMemo(
     () => completedOrders.reduce(
@@ -255,6 +273,22 @@ export default function Home() {
       const next = { ...current };
       if (nextQuantity === 0) delete next[id];
       else next[id] = nextQuantity;
+      return next;
+    });
+  }
+
+
+  function changeHistoryFilter(filter: "today" | "all") {
+    setHistoryFilter(filter);
+    setVisibleOrderCount(ORDERS_PER_PAGE);
+    setExpandedOrderIds(new Set());
+  }
+
+  function toggleOrderDetails(id: string) {
+    setExpandedOrderIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
@@ -564,59 +598,79 @@ export default function Home() {
             <p className="section-kicker">ORDER HISTORY</p>
             <h2 id="history-title">訂單管理</h2>
           </div>
-          <span>共 {orders.length} 筆紀錄</span>
+          <span>共 {filteredOrders.length} 筆紀錄</span>
         </div>
 
-        <div className="order-stats" aria-label="有效訂單統計">
+        <div className="history-filters" aria-label="訂單日期篩選">
+          <button type="button" className={historyFilter === "today" ? "active" : ""} onClick={() => changeHistoryFilter("today")}>今天</button>
+          <button type="button" className={historyFilter === "all" ? "active" : ""} onClick={() => changeHistoryFilter("all")}>全部</button>
+        </div>
+
+        <div className="order-stats" aria-label="目前篩選的有效訂單統計">
           <div><span>有效訂單</span><strong>{orderStats.count} 筆</strong></div>
           <div><span>售出商品</span><strong>{orderStats.items} 件</strong></div>
           <div><span>累計總額</span><strong>{money.format(orderStats.total)}</strong></div>
         </div>
 
-        {orders.length === 0 ? (
+        {filteredOrders.length === 0 ? (
           <div className="empty-history">
-            <p>尚無訂單紀錄</p>
-            <span>送出第一筆訂單後，會自動顯示在這裡。</span>
+            <p>{historyFilter === "today" ? "今天尚無訂單" : "尚無訂單紀錄"}</p>
+            <span>{orders.length === 0 ? "送出第一筆訂單後，會自動顯示在這裡。" : "可以切換到「全部」查看過往訂單。"}</span>
           </div>
         ) : (
-          <div className="history-list">
-            {orders.map((order) => (
-              <article className={`history-card ${order.status === "voided" ? "voided" : ""}`} key={order.id}>
-                <div className="history-card-head">
-                  <div>
-                    <strong>#{order.orderNumber}</strong>
-                    <time dateTime={order.createdAt}>{new Date(order.createdAt).toLocaleString("zh-TW", {
-                      year: "numeric",
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}</time>
-                  </div>
-                  <span className={`order-status ${order.status}`}>
-                    {order.status === "completed" ? "有效" : "已作廢"}
-                  </span>
-                </div>
-                <div className="history-items">
-                  {order.items.map((item) => (
-                    <div key={`${order.id}-${item.productId}`}>
-                      <span>{item.name}<small>{money.format(item.price)} × {item.quantity}</small></span>
-                      <strong>{money.format(item.subtotal)}</strong>
+          <>
+            <div className="history-list">
+              {visibleOrders.map((order) => {
+                const expanded = expandedOrderIds.has(order.id);
+                return (
+                  <article className={`history-card ${order.status === "voided" ? "voided" : ""}`} key={order.id}>
+                    <div className="history-card-head">
+                      <div>
+                        <strong>#{order.orderNumber}</strong>
+                        <time dateTime={order.createdAt}>{new Date(order.createdAt).toLocaleString("zh-TW", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}</time>
+                      </div>
+                      <span className={`order-status ${order.status}`}>
+                        {order.status === "completed" ? "有效" : "已作廢"}
+                      </span>
                     </div>
-                  ))}
-                </div>
-                <div className="history-card-footer">
-                  <div><span>{order.totalItems} 件商品</span><strong>{money.format(order.total)}</strong></div>
-                  <div className="history-actions">
-                    <button className="button ghost" type="button" onClick={() => toggleOrderStatus(order)}>
-                      {order.status === "completed" ? "作廢訂單" : "恢復訂單"}
-                    </button>
-                    <button className="button danger" type="button" onClick={() => deleteOrder(order)}>永久刪除</button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
+                    {expanded && (
+                      <div className="history-items">
+                        {order.items.map((item) => (
+                          <div key={`${order.id}-${item.productId}`}>
+                            <span>{item.name}<small>{money.format(item.price)} × {item.quantity}</small></span>
+                            <strong>{money.format(item.subtotal)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="history-card-footer">
+                      <div><span>{order.totalItems} 件商品</span><strong>{money.format(order.total)}</strong></div>
+                      <div className="history-actions">
+                        <button className="button detail-toggle" type="button" onClick={() => toggleOrderDetails(order.id)} aria-expanded={expanded}>
+                          {expanded ? "收合明細" : "查看明細"}
+                        </button>
+                        <button className="button ghost" type="button" onClick={() => toggleOrderStatus(order)}>
+                          {order.status === "completed" ? "作廢訂單" : "恢復訂單"}
+                        </button>
+                        <button className="button danger" type="button" onClick={() => deleteOrder(order)}>永久刪除</button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {visibleOrderCount < filteredOrders.length && (
+              <button className="button load-more" type="button" onClick={() => setVisibleOrderCount((count) => count + ORDERS_PER_PAGE)}>
+                載入更多（尚有 {filteredOrders.length - visibleOrderCount} 筆）
+              </button>
+            )}
+          </>
         )}
       </section>
 

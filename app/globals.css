@@ -244,3 +244,15 @@ button { color: inherit; }
   .history-items { padding-left: 14px; padding-right: 14px; }
   .history-card-footer { padding: 14px; }
 }
+
+.history-filters { display: inline-flex; gap: 4px; margin: 0 0 14px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.68); }
+.history-filters button { min-width: 72px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 800; cursor: pointer; }
+.history-filters button.active { color: #fff; background: var(--ink); box-shadow: 0 5px 12px rgba(33,51,47,.14); }
+.detail-toggle { color: var(--mint-700); background: var(--mint-100); }
+.load-more { width: 100%; margin-top: 14px; background: rgba(255,255,255,.78); border: 1px solid var(--line); color: var(--mint-700); }
+.load-more:hover { background: var(--mint-50); }
+
+@media (max-width: 780px) {
+  .history-filters { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .history-actions .detail-toggle { grid-column: 1 / -1; }
+}

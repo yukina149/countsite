@@ -27,6 +27,11 @@ test("ships installable, offline, device-local assets", async () => {
   assert.match(page, /訂單管理/);
   assert.match(page, /作廢訂單/);
   assert.match(page, /永久刪除/);
+  assert.match(page, /ORDERS_PER_PAGE = 20/);
+  assert.match(page, /filteredOrders\.slice\(0, visibleOrderCount\)/);
+  assert.match(page, /historyFilter === "today"/);
+  assert.match(page, /aria-expanded={expanded}/);
+  assert.match(page, /載入更多/);
   await access(new URL("../dist/icon-192.png", import.meta.url));
   await access(new URL("../dist/icon-512.png", import.meta.url));
 });
