@@ -6,6 +6,7 @@ import {
   MouseEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -40,6 +41,13 @@ type Order = {
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+type ProductBackup = {
+  format: "market-mate-product-backup";
+  version: 1;
+  exportedAt: string;
+  products: Product[];
 };
 
 const BASE_PATH = import.meta.env.BASE_URL;
@@ -78,6 +86,45 @@ function csvCell(value: string | number) {
   let text = String(value);
   if (/^[=+\-@]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
+}
+
+function readProductsFromBackup(value: unknown): Product[] | null {
+  if (!value || typeof value !== "object") return null;
+  const backup = value as Record<string, unknown>;
+  if (backup.format !== "market-mate-product-backup" || backup.version !== 1 || !Array.isArray(backup.products)) {
+    return null;
+  }
+
+  const ids = new Set<string>();
+  const restoredProducts: Product[] = [];
+  for (const item of backup.products) {
+    if (!item || typeof item !== "object") return null;
+    const product = item as Record<string, unknown>;
+    const id = typeof product.id === "string" ? product.id.trim() : "";
+    const name = typeof product.name === "string" ? product.name.trim() : "";
+    const price = product.price;
+    const accent = product.accent;
+    const image = product.image;
+    const imageIsValid = image === undefined || (
+      typeof image === "string"
+      && (/^data:image\/(?:png|jpeg|webp);base64,/i.test(image) || /^(?:\.?\/|https?:\/\/)/i.test(image))
+    );
+
+    if (
+      !id || id.length > 200 || ids.has(id)
+      || !name || name.length > 40
+      || typeof price !== "number" || !Number.isFinite(price) || price < 0 || !Number.isInteger(price)
+      || typeof accent !== "string" || !/^#[0-9a-f]{6}$/i.test(accent)
+      || !imageIsValid
+    ) {
+      return null;
+    }
+
+    ids.add(id);
+    restoredProducts.push({ id, name, price, accent, ...(typeof image === "string" ? { image } : {}) });
+  }
+
+  return restoredProducts;
 }
 
 
@@ -164,6 +211,7 @@ export default function Home() {
   const [printReportOpen, setPrintReportOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [cashReceived, setCashReceived] = useState("");
+  const backupFileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -174,7 +222,7 @@ export default function Home() {
     ])
       .then(([savedProducts, savedCart, savedOrders]) => {
         if (!active) return;
-        if (savedProducts?.length) setProducts(savedProducts);
+        if (savedProducts !== undefined) setProducts(savedProducts);
         if (savedCart) setCart(savedCart);
         if (savedOrders) setOrders(savedOrders);
       })
@@ -501,6 +549,52 @@ export default function Home() {
     setNotice(`已匯出 ${filteredOrders.length} 筆訂單 CSV`);
   }
 
+  function exportProductBackup() {
+    const backup: ProductBackup = {
+      format: "market-mate-product-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      products,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `market-mate-products-${formatFileDate()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice(`已備份 ${products.length} 項商品`);
+  }
+
+  async function restoreProductBackup(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) {
+      setNotice("備份檔案過大，請確認檔案是否正確");
+      return;
+    }
+
+    try {
+      const restoredProducts = readProductsFromBackup(JSON.parse(await file.text()));
+      if (!restoredProducts) {
+        setNotice("無法還原：不是有效的商品備份檔");
+        return;
+      }
+      if (!window.confirm(`將以備份中的 ${restoredProducts.length} 項商品覆蓋目前商品，並清空目前訂單。歷史訂單不受影響。確定繼續嗎？`)) {
+        return;
+      }
+      setProducts(restoredProducts);
+      setCart({});
+      setCashReceived("");
+      setNotice(`已還原 ${restoredProducts.length} 項商品`);
+    } catch {
+      setNotice("無法還原：JSON 檔案格式錯誤");
+    }
+  }
+
   function exportPdf() {
     if (filteredOrders.length === 0) return;
     const previousTitle = document.title;
@@ -572,6 +666,22 @@ export default function Home() {
             <div>
               <h3 id="catalog-title">商品</h3>
               <span>{products.length} 項商品</span>
+            </div>
+            <div className="product-data-actions">
+              <button className="button ghost data-button" type="button" onClick={exportProductBackup} disabled={products.length === 0}>
+                匯出備份
+              </button>
+              <button className="button ghost data-button" type="button" onClick={() => backupFileInput.current?.click()}>
+                還原商品
+              </button>
+              <input
+                ref={backupFileInput}
+                className="backup-file-input"
+                type="file"
+                accept=".json,application/json"
+                onChange={restoreProductBackup}
+                aria-label="選擇商品 JSON 備份檔"
+              />
             </div>
           </div>
 
