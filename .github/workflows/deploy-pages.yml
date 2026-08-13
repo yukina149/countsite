@@ -27,8 +27,6 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - name: Configure pnpm to allow scripts
-        run: echo "script-shell-bypass-denylist=" >> ~/.npmrc
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build static site
