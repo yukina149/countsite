@@ -19,6 +19,24 @@ type Product = {
 
 type Cart = Record<string, number>;
 
+type OrderItem = {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  subtotal: number;
+};
+
+type Order = {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  status: "completed" | "voided";
+  items: OrderItem[];
+  totalItems: number;
+  total: number;
+};
+
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -110,6 +128,7 @@ async function compressImage(file: File) {
 export default function Home() {
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
   const [cart, setCart] = useState<Cart>({});
+  const [orders, setOrders] = useState<Order[]>([]);
   const [ready, setReady] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -123,11 +142,16 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([readLocal<Product[]>("products"), readLocal<Cart>("cart")])
-      .then(([savedProducts, savedCart]) => {
+    Promise.all([
+      readLocal<Product[]>("products"),
+      readLocal<Cart>("cart"),
+      readLocal<Order[]>("orders"),
+    ])
+      .then(([savedProducts, savedCart, savedOrders]) => {
         if (!active) return;
         if (savedProducts?.length) setProducts(savedProducts);
         if (savedCart) setCart(savedCart);
+        if (savedOrders) setOrders(savedOrders);
       })
       .catch(() => setNotice("本機資料讀取失敗，已先開啟示範商品"))
       .finally(() => active && setReady(true));
@@ -143,6 +167,10 @@ export default function Home() {
   useEffect(() => {
     if (ready) writeLocal("cart", cart).catch(() => setNotice("訂單儲存失敗"));
   }, [cart, ready]);
+
+  useEffect(() => {
+    if (ready) writeLocal("orders", orders).catch(() => setNotice("訂單紀錄儲存失敗"));
+  }, [orders, ready]);
 
   useEffect(() => {
     const updateConnection = () => setIsOnline(navigator.onLine);
@@ -203,6 +231,22 @@ export default function Home() {
   const total = useMemo(
     () => products.reduce((sum, product) => sum + product.price * (cart[product.id] ?? 0), 0),
     [cart, products],
+  );
+
+  const completedOrders = useMemo(
+    () => orders.filter((order) => order.status === "completed"),
+    [orders],
+  );
+  const orderStats = useMemo(
+    () => completedOrders.reduce(
+      (stats, order) => ({
+        count: stats.count + 1,
+        items: stats.items + order.totalItems,
+        total: stats.total + order.total,
+      }),
+      { count: 0, items: 0, total: 0 },
+    ),
+    [completedOrders],
   );
 
   function changeQuantity(id: string, amount: number) {
@@ -299,12 +343,57 @@ export default function Home() {
     setNotice("商品已刪除");
   }
 
-  function clearOrder() {
+  function cancelOrder() {
     if (totalItems > 0 && window.confirm("要清空目前這筆訂單嗎？")) {
       setCart({});
-      setNotice("已開始新訂單");
+      setNotice("已取消本筆訂單");
     }
   }
+
+  function submitOrder() {
+    if (totalItems === 0) return;
+    const createdAt = new Date();
+    const id = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(createdAt.getTime());
+    const items = cartProducts.map((product) => {
+      const quantity = cart[product.id];
+      return {
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        quantity,
+        subtotal: product.price * quantity,
+      };
+    });
+    const orderNumber = `${createdAt.getFullYear()}${String(createdAt.getMonth() + 1).padStart(2, "0")}${String(createdAt.getDate()).padStart(2, "0")}-${String(orders.length + 1).padStart(4, "0")}`;
+    setOrders((current) => [{
+      id,
+      orderNumber,
+      createdAt: createdAt.toISOString(),
+      status: "completed",
+      items,
+      totalItems,
+      total,
+    }, ...current]);
+    setCart({});
+    setNotice(`訂單 ${orderNumber} 已送出`);
+  }
+
+  function toggleOrderStatus(order: Order) {
+    const nextStatus = order.status === "completed" ? "voided" : "completed";
+    const action = nextStatus === "voided" ? "作廢" : "恢復";
+    if (!window.confirm(`確定要${action}訂單 ${order.orderNumber} 嗎？`)) return;
+    setOrders((current) => current.map((item) => (
+      item.id === order.id ? { ...item, status: nextStatus } : item
+    )));
+    setNotice(`訂單已${action}`);
+  }
+
+  function deleteOrder(order: Order) {
+    if (!window.confirm(`永久刪除訂單 ${order.orderNumber}？此動作無法復原。`)) return;
+    setOrders((current) => current.filter((item) => item.id !== order.id));
+    setNotice("訂單已永久刪除");
+  }
+
 
   async function installApp() {
     if (!installPrompt) return;
@@ -457,12 +546,80 @@ export default function Home() {
               <span>總計</span>
               <strong>{money.format(total)}</strong>
             </div>
-            <button className="button new-order" type="button" onClick={clearOrder} disabled={totalItems === 0}>
-              完成並開新單
-            </button>
+            <div className="order-actions">
+              <button className="button cancel-order" type="button" onClick={cancelOrder} disabled={totalItems === 0}>
+                取消本筆
+              </button>
+              <button className="button submit-order" type="button" onClick={submitOrder} disabled={totalItems === 0}>
+                送出訂單
+              </button>
+            </div>
           </div>
         </aside>
       </div>
+
+      <section className="order-history" aria-labelledby="history-title">
+        <div className="history-heading">
+          <div>
+            <p className="section-kicker">ORDER HISTORY</p>
+            <h2 id="history-title">訂單管理</h2>
+          </div>
+          <span>共 {orders.length} 筆紀錄</span>
+        </div>
+
+        <div className="order-stats" aria-label="有效訂單統計">
+          <div><span>有效訂單</span><strong>{orderStats.count} 筆</strong></div>
+          <div><span>售出商品</span><strong>{orderStats.items} 件</strong></div>
+          <div><span>累計總額</span><strong>{money.format(orderStats.total)}</strong></div>
+        </div>
+
+        {orders.length === 0 ? (
+          <div className="empty-history">
+            <p>尚無訂單紀錄</p>
+            <span>送出第一筆訂單後，會自動顯示在這裡。</span>
+          </div>
+        ) : (
+          <div className="history-list">
+            {orders.map((order) => (
+              <article className={`history-card ${order.status === "voided" ? "voided" : ""}`} key={order.id}>
+                <div className="history-card-head">
+                  <div>
+                    <strong>#{order.orderNumber}</strong>
+                    <time dateTime={order.createdAt}>{new Date(order.createdAt).toLocaleString("zh-TW", {
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}</time>
+                  </div>
+                  <span className={`order-status ${order.status}`}>
+                    {order.status === "completed" ? "有效" : "已作廢"}
+                  </span>
+                </div>
+                <div className="history-items">
+                  {order.items.map((item) => (
+                    <div key={`${order.id}-${item.productId}`}>
+                      <span>{item.name}<small>{money.format(item.price)} × {item.quantity}</small></span>
+                      <strong>{money.format(item.subtotal)}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="history-card-footer">
+                  <div><span>{order.totalItems} 件商品</span><strong>{money.format(order.total)}</strong></div>
+                  <div className="history-actions">
+                    <button className="button ghost" type="button" onClick={() => toggleOrderStatus(order)}>
+                      {order.status === "completed" ? "作廢訂單" : "恢復訂單"}
+                    </button>
+                    <button className="button danger" type="button" onClick={() => deleteOrder(order)}>永久刪除</button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
 
       <a className="mobile-total" href="#order-summary">
         <span><b>{totalItems}</b> 件商品</span>

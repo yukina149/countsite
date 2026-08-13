@@ -22,6 +22,11 @@ test("ships installable, offline, device-local assets", async () => {
   assert.match(serviceWorker, /self\.registration\.scope/);
   assert.match(page, /indexedDB\.open/);
   assert.match(page, /import\.meta\.env\.BASE_URL/);
+  assert.match(page, /writeLocal\("orders", orders\)/);
+  assert.match(page, /function submitOrder\(\)/);
+  assert.match(page, /訂單管理/);
+  assert.match(page, /作廢訂單/);
+  assert.match(page, /永久刪除/);
   await access(new URL("../dist/icon-192.png", import.meta.url));
   await access(new URL("../dist/icon-512.png", import.meta.url));
 });
