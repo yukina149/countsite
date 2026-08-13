@@ -27,10 +27,10 @@ type InstallPromptEvent = Event & {
 const BASE_PATH = import.meta.env.BASE_URL;
 
 const SEED_PRODUCTS: Product[] = [
-  { id: "sample-1", name: "手作檸檬塔", price: 85, accent: "#F7D8A8" },
-  { id: "sample-2", name: "冷泡烏龍茶", price: 60, accent: "#CFE8DB" },
-  { id: "sample-3", name: "奶油鹽可頌", price: 55, accent: "#F1CFC9" },
-  { id: "sample-4", name: "小山園抹茶餅乾", price: 120, accent: "#DCE6C8" },
+  { id: "sample-1", name: "商品一", price: 85, accent:"#a8daf7" ,image: `${BASE_PATH}products/P3.png`},
+  { id: "sample-2", name: "商品二", price: 60, accent: "#efe9a8",image: `${BASE_PATH}products/P4.png` },
+  { id: "sample-3", name: "商品三", price: 55, accent: "#dc9386",image: `${BASE_PATH}products/P5.png`},
+  { id: "sample-4", name: "商品四", price: 120, accent: "#DCE6C8" },
 ];
 
 const ACCENTS = ["#CFE8DB", "#D9E6F2", "#F7D8A8", "#E7D9EF", "#F1CFC9"];
@@ -321,10 +321,15 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true"><span>+</span></div>
+          <div className="brand-mark">
+            <img
+              src={`${BASE_PATH}brand_icon.png`}
+              alt="擺攤小工具"
+            />
+          </div>
           <div>
-            <p className="eyebrow">MARKET MATE</p>
-            <h1>小攤計價</h1>
+            <h1>擺攤小工具</h1>
+            <p className="eyebrow">By 鸚鵡螺</p>
           </div>
         </div>
         <div className="top-actions">
@@ -344,8 +349,8 @@ export default function Home() {
 
       <section className="intro-row">
         <div>
-          <p className="section-kicker">今日攤位</p>
-          <h2>點一下商品，就加入這筆訂單</h2>
+          <p className="section-kicker">使用說明</p>
+          <h2>點一下商品即加入訂單</h2>
         </div>
         <p className="saved-note"><span aria-hidden="true">●</span> 商品與訂單自動儲存在這台裝置</p>
       </section>
