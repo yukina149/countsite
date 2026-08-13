@@ -1,7 +1,15 @@
-const CACHE_NAME = "market-mate-pages-v1";
+const CACHE_NAME = "market-mate-pages-v2";
 const BASE_PATH = new URL(self.registration.scope).pathname;
 const asset = (name = "") => `${BASE_PATH}${name}`;
-const CORE_ASSETS = [asset(), asset("manifest.webmanifest"), asset("icon-192.png"), asset("icon-512.png")];
+const CORE_ASSETS = [
+  asset(),
+  asset("manifest.webmanifest"),
+  asset("icon-192.png"),
+  asset("icon-512.png"),
+  asset("icon-maskable-192.png"),
+  asset("icon-maskable-512.png"),
+  asset("apple-touch-icon.png"),
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));

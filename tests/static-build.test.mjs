@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
+async function readPngSize(url) {
+  const image = await readFile(url);
+  assert.equal(image.toString("ascii", 1, 4), "PNG");
+  return {
+    width: image.readUInt32BE(16),
+    height: image.readUInt32BE(20),
+  };
+}
+
 test("builds a GitHub Pages app under /countsite/", async () => {
   const html = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
   assert.match(html, /\/countsite\/assets\//);
@@ -20,6 +29,7 @@ test("ships installable, offline, device-local assets", async () => {
   assert.equal(manifest.start_url, "./");
   assert.equal(manifest.scope, "./");
   assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.icons.filter((icon) => icon.purpose === "maskable").length, 2);
   assert.match(serviceWorker, /self\.registration\.scope/);
   assert.match(page, /indexedDB\.open/);
   assert.match(page, /import\.meta\.env\.BASE_URL/);
@@ -43,4 +53,12 @@ test("ships installable, offline, device-local assets", async () => {
   assert.match(styles, /@page \{ size: A4 portrait/);
   await access(new URL("../dist/icon-192.png", import.meta.url));
   await access(new URL("../dist/icon-512.png", import.meta.url));
+  await access(new URL("../dist/icon-maskable-192.png", import.meta.url));
+  await access(new URL("../dist/icon-maskable-512.png", import.meta.url));
+  await access(new URL("../dist/apple-touch-icon.png", import.meta.url));
+  assert.deepEqual(await readPngSize(new URL("../dist/icon-192.png", import.meta.url)), { width: 192, height: 192 });
+  assert.deepEqual(await readPngSize(new URL("../dist/icon-512.png", import.meta.url)), { width: 512, height: 512 });
+  assert.deepEqual(await readPngSize(new URL("../dist/icon-maskable-192.png", import.meta.url)), { width: 192, height: 192 });
+  assert.deepEqual(await readPngSize(new URL("../dist/icon-maskable-512.png", import.meta.url)), { width: 512, height: 512 });
+  assert.deepEqual(await readPngSize(new URL("../dist/apple-touch-icon.png", import.meta.url)), { width: 180, height: 180 });
 });
